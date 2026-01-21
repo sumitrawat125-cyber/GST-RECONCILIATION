@@ -2,11 +2,35 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from io import BytesIO
+import re
 
 st.set_page_config(page_title="GST Reconciliation", page_icon="📊", layout="wide")
 
 st.title("📊 GST Reconciliation Tool")
 st.markdown("Upload your **GSTR-2B (Portal Download)** and **Purchase Register** files to get reconciliation report")
+
+def clean_invoice_number(invoice):
+    """
+    Clean invoice number by:
+    1. Converting to string
+    2. Removing leading zeros
+    3. Removing all special characters (-, /, _, spaces, etc.)
+    4. Converting to uppercase
+    """
+    # Convert to string and strip whitespace
+    invoice_str = str(invoice).strip()
+    
+    # Remove all special characters: -, /, _, spaces, dots, commas, etc.
+    invoice_cleaned = re.sub(r'[-/_ .,@#$%^&*()\[\]{}]', '', invoice_str)
+    
+    # Convert to uppercase
+    invoice_cleaned = invoice_cleaned.upper()
+    
+    # Remove leading zeros
+    invoice_cleaned = invoice_cleaned.lstrip('0') or '0'
+    
+    return invoice_cleaned
+
 
 col1, col2 = st.columns(2)
 
@@ -25,14 +49,20 @@ if portal_file and books_file:
             df_portal = pd.read_excel(portal_file)
             df_books = pd.read_excel(books_file)
             
-            # Clean invoice numbers
-            df_portal['Invoice_Clean'] = df_portal['Invoice number'].astype(str).str.strip().str.replace('-', '').str.replace(' ', '').str.upper()
-            df_books['Invoice_Clean'] = df_books['VENDOR INVOICE NO'].astype(str).str.strip().str.replace('-', '').str.replace(' ', '').str.upper()
+            # ===== INVOICE CLEANING (UPDATED) =====
+            # Store ORIGINAL invoice numbers first
+            df_portal['Invoice_Original'] = df_portal['Invoice number'].astype(str)
+            df_books['Invoice_Original'] = df_books['VENDOR INVOICE NO'].astype(str)
             
+            # Clean invoice numbers - remove special chars and leading zeros
+            df_portal['Invoice_Clean'] = df_portal['Invoice number'].apply(clean_invoice_number)
+            df_books['Invoice_Clean'] = df_books['VENDOR INVOICE NO'].apply(clean_invoice_number)
+            
+            # ===== GSTIN CLEANING =====
             df_portal['GSTIN_Clean'] = df_portal['GSTIN of supplier'].astype(str).str.strip().str.upper()
             df_books['GSTIN_Clean'] = df_books['VENDOR GSTIN'].astype(str).str.strip().str.upper()
             
-            # Prepare amounts
+            # ===== PREPARE AMOUNTS =====
             df_portal['Taxable'] = pd.to_numeric(df_portal['Taxable Value (₹)'], errors='coerce').fillna(0).round(2)
             df_portal['IGST'] = pd.to_numeric(df_portal['Integrated Tax(₹)'], errors='coerce').fillna(0).round(2)
             df_portal['CGST'] = pd.to_numeric(df_portal['Central Tax(₹)'], errors='coerce').fillna(0).round(2)
@@ -45,14 +75,32 @@ if portal_file and books_file:
             df_books['IGST'] = pd.to_numeric(df_books['IGST'], errors='coerce').fillna(0).round(2)
             df_books['TotalGST'] = df_books['CGST'] + df_books['SGST'] + df_books['IGST']
             
-            # Group duplicates
-            portal_agg = {'Trade/Legal name': 'first', 'Invoice Date': 'first', 'Taxable': 'sum', 'IGST': 'sum', 'CGST': 'sum', 'SGST': 'sum', 'TotalGST': 'sum'}
+            # ===== GROUP DUPLICATES =====
+            portal_agg = {
+                'Trade/Legal name': 'first', 
+                'Invoice Date': 'first', 
+                'Invoice_Original': 'first',  # Include original invoice
+                'Taxable': 'sum', 
+                'IGST': 'sum', 
+                'CGST': 'sum', 
+                'SGST': 'sum', 
+                'TotalGST': 'sum'
+            }
             portal_grouped = df_portal.groupby(['GSTIN_Clean', 'Invoice_Clean']).agg(portal_agg).reset_index()
             
-            books_agg = {'VENDOR NAME': 'first', 'DATE': 'first', 'Taxable': 'sum', 'IGST': 'sum', 'CGST': 'sum', 'SGST': 'sum', 'TotalGST': 'sum'}
+            books_agg = {
+                'VENDOR NAME': 'first', 
+                'DATE': 'first', 
+                'Invoice_Original': 'first',  # Include original invoice
+                'Taxable': 'sum', 
+                'IGST': 'sum', 
+                'CGST': 'sum', 
+                'SGST': 'sum', 
+                'TotalGST': 'sum'
+            }
             books_grouped = df_books.groupby(['GSTIN_Clean', 'Invoice_Clean']).agg(books_agg).reset_index()
             
-            # Matching
+            # ===== MATCHING =====
             portal_grouped['Key'] = portal_grouped['GSTIN_Clean'] + '|' + portal_grouped['Invoice_Clean']
             books_grouped['Key'] = books_grouped['GSTIN_Clean'] + '|' + books_grouped['Invoice_Clean']
             
@@ -69,7 +117,7 @@ if portal_file and books_file:
             missing_books = comparison[comparison['Status'] == 'MISSING_IN_BOOKS']
             missing_portal = comparison[comparison['Status'] == 'MISSING_IN_PORTAL']
             
-            # Display results
+            # ===== DISPLAY RESULTS =====
             st.success("✅ Reconciliation Complete!")
             
             col1, col2, col3, col4 = st.columns(4)
@@ -78,7 +126,9 @@ if portal_file and books_file:
             col3.metric("❌ Missing in Books", len(missing_books))
             col4.metric("❌ Missing in Portal", len(missing_portal))
             
-            # Create Excel
+            st.info("📝 **Note:** Invoice numbers have been cleaned by removing leading zeros and special characters (-, /, _, spaces, etc.)")
+            
+            # ===== CREATE EXCEL EXPORT =====
             output = BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 # Summary Sheet
@@ -92,7 +142,9 @@ if portal_file and books_file:
                     perfect_export = pd.DataFrame()
                     perfect_export['Match_Key'] = perfect['Key']
                     perfect_export['GSTIN'] = perfect['GSTIN_Clean_P']
-                    perfect_export['Invoice_No'] = perfect['Invoice_Clean_P']
+                    perfect_export['Invoice_Clean'] = perfect['Invoice_Clean']
+                    perfect_export['Invoice_Original_Portal'] = perfect['Invoice_Original_P']  # ← ORIGINAL INVOICE
+                    perfect_export['Invoice_Original_Books'] = perfect['Invoice_Original_B']   # ← ORIGINAL INVOICE
                     perfect_export['Supplier'] = perfect['Trade/Legal name']
                     perfect_export['Taxable_Value'] = perfect['Taxable_P']
                     perfect_export['CGST'] = perfect['CGST_P']
@@ -106,7 +158,9 @@ if portal_file and books_file:
                     mismatch_export = pd.DataFrame()
                     mismatch_export['Match_Key'] = mismatch['Key']
                     mismatch_export['GSTIN'] = mismatch['GSTIN_Clean_P']
-                    mismatch_export['Invoice_No'] = mismatch['Invoice_Clean_P']
+                    mismatch_export['Invoice_Clean'] = mismatch['Invoice_Clean']
+                    mismatch_export['Invoice_Original_Portal'] = mismatch['Invoice_Original_P']  # ← ORIGINAL
+                    mismatch_export['Invoice_Original_Books'] = mismatch['Invoice_Original_B']   # ← ORIGINAL
                     mismatch_export['Supplier'] = mismatch['Trade/Legal name']
                     mismatch_export['Taxable_Portal'] = mismatch['Taxable_P']
                     mismatch_export['Taxable_Books'] = mismatch['Taxable_B']
@@ -121,7 +175,8 @@ if portal_file and books_file:
                     missing_b = pd.DataFrame()
                     missing_b['Match_Key'] = missing_books['Key']
                     missing_b['GSTIN'] = missing_books['GSTIN_Clean_P']
-                    missing_b['Invoice_No'] = missing_books['Invoice_Clean_P']
+                    missing_b['Invoice_Clean'] = missing_books['Invoice_Clean']
+                    missing_b['Invoice_Original'] = missing_books['Invoice_Original_P']  # ← ORIGINAL
                     missing_b['Supplier'] = missing_books['Trade/Legal name']
                     missing_b['Taxable_Value'] = missing_books['Taxable_P']
                     missing_b['Total_GST'] = missing_books['TotalGST_P']
@@ -132,7 +187,8 @@ if portal_file and books_file:
                     missing_p = pd.DataFrame()
                     missing_p['Match_Key'] = missing_portal['Key']
                     missing_p['GSTIN'] = missing_portal['GSTIN_Clean_B']
-                    missing_p['Invoice_No'] = missing_portal['Invoice_Clean_B']
+                    missing_p['Invoice_Clean'] = missing_portal['Invoice_Clean']
+                    missing_p['Invoice_Original'] = missing_portal['Invoice_Original_B']  # ← ORIGINAL
                     missing_p['Vendor'] = missing_portal['VENDOR NAME']
                     missing_p['Taxable_Value'] = missing_portal['Taxable_B']
                     missing_p['Total_GST'] = missing_portal['TotalGST_B']

@@ -81,20 +81,58 @@ if portal_file and books_file:
             # Create Excel
             output = BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                pd.DataFrame({'Category': ['Perfect Match', 'Value Mismatch', 'Missing in Books', 'Missing in Portal'], 
-                             'Count': [len(perfect), len(mismatch), len(missing_books), len(missing_portal)]}).to_excel(writer, sheet_name='Summary', index=False)
+                # Summary Sheet
+                pd.DataFrame({
+                    'Category': ['Perfect Match', 'Value Mismatch', 'Missing in Books', 'Missing in Portal'], 
+                    'Count': [len(perfect), len(mismatch), len(missing_books), len(missing_portal)]
+                }).to_excel(writer, sheet_name='Summary', index=False)
                 
+                # Perfect Match Sheet
                 if len(perfect) > 0:
-                    perfect[['GSTIN_Clean_P', 'Invoice_Clean', 'Trade/Legal name', 'Taxable_P', 'CGST_P', 'SGST_P', 'IGST_P', 'TotalGST_P']].to_excel(writer, sheet_name='Perfect_Match', index=False)
+                    perfect_export = pd.DataFrame()
+                    perfect_export['GSTIN'] = perfect['GSTIN_Clean_P']
+                    perfect_export['Invoice_No'] = perfect['Invoice_Clean']
+                    perfect_export['Supplier'] = perfect['Trade/Legal name']
+                    perfect_export['Taxable_Value'] = perfect['Taxable_P']
+                    perfect_export['CGST'] = perfect['CGST_P']
+                    perfect_export['SGST'] = perfect['SGST_P']
+                    perfect_export['IGST'] = perfect['IGST_P']
+                    perfect_export['Total_GST'] = perfect['TotalGST_P']
+                    perfect_export.to_excel(writer, sheet_name='Perfect_Match', index=False)
                 
+                # Value Mismatch Sheet
                 if len(mismatch) > 0:
-                    mismatch[['GSTIN_Clean_P', 'Invoice_Clean', 'Trade/Legal name', 'Taxable_P', 'Taxable_B', 'Tax_Diff', 'TotalGST_P', 'TotalGST_B', 'GST_Diff']].to_excel(writer, sheet_name='Value_Mismatch', index=False)
+                    mismatch_export = pd.DataFrame()
+                    mismatch_export['GSTIN'] = mismatch['GSTIN_Clean_P']
+                    mismatch_export['Invoice_No'] = mismatch['Invoice_Clean']
+                    mismatch_export['Supplier'] = mismatch['Trade/Legal name']
+                    mismatch_export['Taxable_Portal'] = mismatch['Taxable_P']
+                    mismatch_export['Taxable_Books'] = mismatch['Taxable_B']
+                    mismatch_export['Taxable_Diff'] = mismatch['Tax_Diff']
+                    mismatch_export['GST_Portal'] = mismatch['TotalGST_P']
+                    mismatch_export['GST_Books'] = mismatch['TotalGST_B']
+                    mismatch_export['GST_Diff'] = mismatch['GST_Diff']
+                    mismatch_export.to_excel(writer, sheet_name='Value_Mismatch', index=False)
                 
+                # Missing in Books Sheet
                 if len(missing_books) > 0:
-                    missing_books[['GSTIN_Clean_P', 'Invoice_Clean', 'Trade/Legal name', 'Taxable_P', 'TotalGST_P']].to_excel(writer, sheet_name='Missing_in_Books', index=False)
+                    missing_b = pd.DataFrame()
+                    missing_b['GSTIN'] = missing_books['GSTIN_Clean_P']
+                    missing_b['Invoice_No'] = missing_books['Invoice_Clean']
+                    missing_b['Supplier'] = missing_books['Trade/Legal name']
+                    missing_b['Taxable_Value'] = missing_books['Taxable_P']
+                    missing_b['Total_GST'] = missing_books['TotalGST_P']
+                    missing_b.to_excel(writer, sheet_name='Missing_in_Books', index=False)
                 
+                # Missing in Portal Sheet
                 if len(missing_portal) > 0:
-                    missing_portal[['GSTIN_Clean_B', 'Invoice_Clean', 'VENDOR NAME', 'Taxable_B', 'TotalGST_B']].to_excel(writer, sheet_name='Missing_in_Portal', index=False)
+                    missing_p = pd.DataFrame()
+                    missing_p['GSTIN'] = missing_portal['GSTIN_Clean_B']
+                    missing_p['Invoice_No'] = missing_portal['Invoice_Clean']
+                    missing_p['Vendor'] = missing_portal['VENDOR NAME']
+                    missing_p['Taxable_Value'] = missing_portal['Taxable_B']
+                    missing_p['Total_GST'] = missing_portal['TotalGST_B']
+                    missing_p.to_excel(writer, sheet_name='Missing_in_Portal', index=False)
             
             output.seek(0)
             

@@ -90,8 +90,9 @@ if portal_file and books_file:
                 # Perfect Match Sheet
                 if len(perfect) > 0:
                     perfect_export = pd.DataFrame()
+                    perfect_export['Match_Key'] = perfect['Key']
                     perfect_export['GSTIN'] = perfect['GSTIN_Clean_P']
-                    perfect_export['Invoice_No'] = perfect['Invoice_Clean']
+                    perfect_export['Invoice_No'] = perfect['Invoice_Clean_P']
                     perfect_export['Supplier'] = perfect['Trade/Legal name']
                     perfect_export['Taxable_Value'] = perfect['Taxable_P']
                     perfect_export['CGST'] = perfect['CGST_P']
@@ -103,8 +104,9 @@ if portal_file and books_file:
                 # Value Mismatch Sheet
                 if len(mismatch) > 0:
                     mismatch_export = pd.DataFrame()
+                    mismatch_export['Match_Key'] = mismatch['Key']
                     mismatch_export['GSTIN'] = mismatch['GSTIN_Clean_P']
-                    mismatch_export['Invoice_No'] = mismatch['Invoice_Clean']
+                    mismatch_export['Invoice_No'] = mismatch['Invoice_Clean_P']
                     mismatch_export['Supplier'] = mismatch['Trade/Legal name']
                     mismatch_export['Taxable_Portal'] = mismatch['Taxable_P']
                     mismatch_export['Taxable_Books'] = mismatch['Taxable_B']
@@ -117,8 +119,9 @@ if portal_file and books_file:
                 # Missing in Books Sheet
                 if len(missing_books) > 0:
                     missing_b = pd.DataFrame()
+                    missing_b['Match_Key'] = missing_books['Key']
                     missing_b['GSTIN'] = missing_books['GSTIN_Clean_P']
-                    missing_b['Invoice_No'] = missing_books['Invoice_Clean']
+                    missing_b['Invoice_No'] = missing_books['Invoice_Clean_P']
                     missing_b['Supplier'] = missing_books['Trade/Legal name']
                     missing_b['Taxable_Value'] = missing_books['Taxable_P']
                     missing_b['Total_GST'] = missing_books['TotalGST_P']
@@ -127,8 +130,9 @@ if portal_file and books_file:
                 # Missing in Portal Sheet
                 if len(missing_portal) > 0:
                     missing_p = pd.DataFrame()
+                    missing_p['Match_Key'] = missing_portal['Key']
                     missing_p['GSTIN'] = missing_portal['GSTIN_Clean_B']
-                    missing_p['Invoice_No'] = missing_portal['Invoice_Clean']
+                    missing_p['Invoice_No'] = missing_portal['Invoice_Clean_B']
                     missing_p['Vendor'] = missing_portal['VENDOR NAME']
                     missing_p['Taxable_Value'] = missing_portal['Taxable_B']
                     missing_p['Total_GST'] = missing_portal['TotalGST_B']
